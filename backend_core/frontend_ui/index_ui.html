@@ -6,74 +6,120 @@
   <link rel="stylesheet" href="style_ui.css" />
 </head>
 <body>
-  <div class="app-container">
-    <header class="app-header">
-      <div class="title-group">
-        <div class="logo-circle">G</div>
-        <div>
+  <div class="app-shell">
+    <!-- Sidebar: Sessions & Info -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">G</div>
+        <div class="brand-text">
           <h1>Granite Advanced Chatbot</h1>
-          <p class="subtitle">Local · Free · IBM Granite 3.1–2B</p>
+          <p>Local · Free · IBM Granite 3.1–2B</p>
         </div>
       </div>
-      <div class="header-actions">
-        <select id="mode-select" class="mode-select">
-          <option value="general">General</option>
-          <option value="coding">Coding</option>
-          <option value="teacher">Teacher</option>
-          <option value="summarizer">Summarizer</option>
-        </select>
 
-        <div class="export-group">
-          <span class="export-label">Export</span>
-          <button id="export-txt-btn" class="secondary-btn tiny-btn">TXT</button>
-          <button id="export-docx-btn" class="secondary-btn tiny-btn">DOCX</button>
-          <button id="export-pdf-btn" class="secondary-btn tiny-btn">PDF</button>
+      <div class="sidebar-section">
+        <div class="sidebar-header">
+          <span>Sessions</span>
+          <button id="newSessionBtn" class="pill-btn pill-btn-small">+ New</button>
+        </div>
+        <div id="sessionsList" class="sessions-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <p class="sidebar-hint">
+          Tip: Upload PDFs, DOCX, TXT or images on the right.  
+          Enable <strong>RAG</strong> to let Granite use them.
+        </p>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-panel">
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="mode-switcher">
+          <label for="modeSelect">Mode</label>
+          <select id="modeSelect">
+            <option value="general">General</option>
+            <option value="coding">Coding</option>
+            <option value="teacher">Teacher</option>
+            <option value="summarizer">Summarizer</option>
+          </select>
         </div>
 
-        <button id="clear-chat-btn" class="secondary-btn">Clear Chat</button>
+        <div class="topbar-actions">
+          <div class="export-group">
+            <span>Export</span>
+            <button class="pill-btn export-btn" data-format="txt">TXT</button>
+            <button class="pill-btn export-btn" data-format="docx">DOCX</button>
+            <button class="pill-btn export-btn" data-format="pdf">PDF</button>
+          </div>
+          <button id="clearChatBtn" class="pill-btn pill-btn-danger">Clear Chat</button>
+          <label class="toggle">
+            <input type="checkbox" id="ragToggle" checked />
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">RAG enabled</span>
+          </label>
+        </div>
+      </header>
 
-        <label class="toggle">
-          <input type="checkbox" id="rag-toggle" checked />
-          <span class="slider"></span>
-          <span class="toggle-label">RAG enabled</span>
-        </label>
-      </div>
-    </header>
-
-    <main class="main-layout">
-      <section class="chat-panel">
-        <div id="chat-window" class="chat-window"></div>
-        <form id="chat-form" class="chat-input-bar">
-          <textarea id="user-input" placeholder="Ask Granite anything..." rows="1"></textarea>
-          <button type="button" id="mic-btn" class="icon-btn" title="Voice input">🎤</button>
-          <button type="button" id="tts-toggle-btn" class="icon-btn" title="Toggle voice output">🔊</button>
-          <button type="submit" id="send-btn">Send</button>
-        </form>
+      <!-- Chat window -->
+      <section class="chat-container" id="chatContainer">
+        <!-- Messages will be injected here -->
       </section>
 
-      <aside class="side-panel">
-        <h2>Documents (RAG)</h2>
-        <p class="side-text">
-          Upload PDFs, DOCX, TXT or images. Granite will use them as context
-          when answering (if RAG is enabled).
-        </p>
-        <form id="upload-form">
-          <input type="file" id="file-input" />
-          <input type="text" id="source-name" placeholder="Optional label" />
-          <button type="submit" class="secondary-btn">Upload &amp; Index</button>
-        </form>
-        <div id="upload-status" class="status-box"></div>
-
-        <hr />
-
-        <div class="sessions-header-row">
-          <h3>Sessions</h3>
-          <button id="new-session-btn" class="secondary-btn tiny-btn">+ New</button>
+      <!-- Input bar -->
+      <footer class="input-bar">
+        <div class="input-inner">
+          <textarea
+            id="userInput"
+            placeholder="Ask Granite anything..."
+            rows="1"
+          ></textarea>
+          <div class="input-actions">
+            <button id="micBtn" class="icon-btn" title="Voice input">
+              🎤
+            </button>
+            <button id="ttsToggleBtn" class="icon-btn" title="Toggle TTS">
+              🔊
+            </button>
+            <button id="sendBtn" class="pill-btn pill-btn-primary">Send</button>
+          </div>
         </div>
-        <div id="session-list" class="session-list"></div>
-        <div id="active-session-id" class="session-id-box"></div>
-      </aside>
+      </footer>
     </main>
+
+    <!-- Right panel: RAG documents -->
+    <aside class="right-panel">
+      <section class="rag-panel">
+        <h2>Documents (RAG)</h2>
+        <p class="rag-subtitle">
+          Upload PDFs, DOCX, TXT or images. Granite will use them as context (if RAG is enabled).
+        </p>
+
+        <div class="file-upload">
+          <input type="file" id="fileInput" />
+          <input
+            type="text"
+            id="fileLabelInput"
+            placeholder="Optional label"
+          />
+          <button id="uploadBtn" class="pill-btn pill-btn-secondary">
+            Upload &amp; Index
+          </button>
+        </div>
+
+        <div class="rag-status">
+          <span>Indexed chunks:</span>
+          <span id="corpusCount">0</span>
+        </div>
+      </section>
+
+      <section class="session-info">
+        <h3>Active Session</h3>
+        <p id="activeSessionId" class="session-id"></p>
+      </section>
+    </aside>
   </div>
 
   <script src="app_ui.js"></script>
