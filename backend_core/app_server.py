@@ -1,10 +1,10 @@
-
 # backend_core/app_server.py
 
 import threading
 from pathlib import Path
 from typing import List
 
+import torch
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -14,6 +14,7 @@ from fastapi.responses import (
     Response,
 )
 from pydantic import BaseModel
+from transformers import TextIteratorStreamer
 
 from model_loader import get_llm, get_llm_tokenizer, load_models
 from memory_handler import (
@@ -28,9 +29,6 @@ from rag_engine import (
     corpus_size,
 )
 from utils_core import build_prompt, sanitize_stream_text
-
-import torch
-from transformers import TextIteratorStreamer
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "vector_store"
@@ -80,9 +78,9 @@ async def root():
     return """
     <html>
       <head><title>Granite Backend</title></head>
-      <body style="font-family: sans-serif; background:#020617; color:#e5e7eb;">
+      <body style="font-family: system-ui, sans-serif; background:#020617; color:#e5e7eb;">
         <h2>Granite backend is running ✅</h2>
-        <p>Open <code>frontend_ui/index_ui.html</code> in your browser to use the chat UI.</p>
+        <p>Open <code>backend_core/frontend_ui/index_ui.html</code> in your browser to use the chat UI.</p>
         <p>API docs: <a href="/docs">/docs</a> · Health: <a href="/health">/health</a></p>
       </body>
     </html>
@@ -91,9 +89,9 @@ async def root():
 
 @app.post("/chat_stream")
 async def chat_stream(req: ChatRequest):
-    session_id = req.session_id or "default"
-    user_message = req.message.strip()
-    use_rag = req.use_rag
+    session_id = (req.session_id or "").strip() or "default"
+    user_message = (req.message or "").strip()
+    use_rag = bool(req.use_rag)
     mode = (req.mode or "general").lower()
 
     if not user_message:
@@ -115,7 +113,11 @@ async def chat_stream(req: ChatRequest):
         device = model.device if hasattr(model, "device") else torch.device("cpu")
 
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True, skip_prompt=True)
+        streamer = TextIteratorStreamer(
+            tokenizer,
+            skip_special_tokens=True,
+            skip_prompt=True,
+        )
 
         generate_kwargs = dict(
             **inputs,
@@ -129,7 +131,7 @@ async def chat_stream(req: ChatRequest):
         thread = threading.Thread(target=model.generate, kwargs=generate_kwargs)
         thread.start()
 
-        collected = []
+        collected: List[str] = []
         for new_text in streamer:
             collected.append(new_text)
             yield sanitize_stream_text(new_text)
@@ -147,11 +149,11 @@ async def upload_file(
     file: UploadFile = File(...),
     source_name: str = Form(None),
 ):
-    if source_name is None or not source_name.strip():
-        source_name = file.filename or "uploaded_document"
-
     if not file.filename:
         return JSONResponse({"error": "No file name"}, status_code=400)
+
+    if source_name is None or not source_name.strip():
+        source_name = file.filename
 
     save_path = UPLOAD_DIR / file.filename
     with open(save_path, "wb") as f:
@@ -192,10 +194,11 @@ async def export_chat(req: ExportRequest):
     base_name = f"granite_chat_{req.session_id}"
 
     if fmt == "txt":
-        lines = []
+        lines: List[str] = []
         for m in history:
-            role = m["role"].capitalize()
-            lines.append(f"{role}: {m['content']}")
+            role = m.get("role", "").capitalize()
+            content = m.get("content", "")
+            lines.append(f"{role}: {content}")
             lines.append("")
         text = "\n".join(lines)
         return Response(
@@ -204,28 +207,36 @@ async def export_chat(req: ExportRequest):
             headers={"Content-Disposition": f'attachment; filename="{base_name}.txt"'},
         )
 
-    elif fmt == "docx":
+    if fmt == "docx":
         from io import BytesIO
         from docx import Document
+
         buffer = BytesIO()
         doc = Document()
         doc.add_heading("Granite Chat Export", level=1)
         doc.add_paragraph(f"Session ID: {req.session_id}")
         doc.add_paragraph("")
+
         for m in history:
+            role = m.get("role", "").capitalize()
+            content = m.get("content", "")
             p = doc.add_paragraph()
-            role_run = p.add_run(f"{m['role'].capitalize()}: ")
-            role_run.bold = True
-            p.add_run(m["content"])
+            run_role = p.add_run(f"{role}: ")
+            run_role.bold = True
+            p.add_run(content)
+
         doc.save(buffer)
         buffer.seek(0)
         return StreamingResponse(
             buffer,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
             headers={"Content-Disposition": f'attachment; filename="{base_name}.docx"'},
         )
 
-    elif fmt == "pdf":
+    if fmt == "pdf":
         from io import BytesIO
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
@@ -249,14 +260,17 @@ async def export_chat(req: ExportRequest):
         wrap_width = 95
 
         for m in history:
-            role = m["role"].capitalize()
-            content = (m["content"] or "").replace("\r", "")
+            role = m.get("role", "").capitalize()
+            content = (m.get("content", "") or "").replace("\r", "")
+
             if y <= margin:
                 c.showPage()
                 y = height - margin
+
             c.setFont("Helvetica-Bold", 10)
             c.drawString(margin, y, f"{role}:")
             y -= 14
+
             c.setFont("Helvetica", 10)
             for line in content.split("\n"):
                 for subline in textwrap.wrap(line, width=wrap_width):
@@ -277,8 +291,7 @@ async def export_chat(req: ExportRequest):
             headers={"Content-Disposition": f'attachment; filename="{base_name}.pdf"'},
         )
 
-    else:
-        return JSONResponse({"error": "Unsupported format"}, status_code=400)
+    return JSONResponse({"error": "Unsupported format"}, status_code=400)
 
 
 @app.get("/health")
