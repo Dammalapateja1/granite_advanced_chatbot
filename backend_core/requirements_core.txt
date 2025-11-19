@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+transformers
+# For Windows: If you encounter DLL errors, install Visual C++ Redistributable first:
+# https://aka.ms/vs/17/release/vc_redist.x64.exe
+# Then reinstall torch: pip uninstall torch && pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+sentencepiece
+faiss-cpu
+pypdf
+python-docx
+numpy
+pillow
+pytesseract
+reportlab
